@@ -1,5 +1,7 @@
 package bitcask_kv
 
+import "os"
+
 type Options struct {
 	DirPath      string // 数据库数据路径
 	DataFileSize int64  //数据文件大小
@@ -16,3 +18,10 @@ const (
 	// ART 自适应基数树索引
 	ART
 )
+
+var DefaultOptions = Options {
+	DirPath: os.TempDir(),
+	DataFileSize: 256 * 1024 * 1024, // 256MB
+	SyncWrite: false,
+	IndexType: Btree,
+}

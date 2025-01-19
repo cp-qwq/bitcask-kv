@@ -37,7 +37,10 @@ func OpenDataFile(dirPath string, fileId uint32) (*DataFile, error) {
 	}, nil
 }
 
-func (df *DataFile) ReadLogRecord(Offset int64) (*LogRecord, int64, error) {
+// ReadLogRecord 对当前数据文件从指定偏移量开始读取一条日志数据
+// 返回一个 LogRecord 实例和字节长度
+func (df *DataFile) ReadLogRecord(offset int64) (*LogRecord, int64, error) {
+	// 获取当前文件总长度
 	fileSize, err := df.IoManager.Size()
 	if err != nil {
 		return nil, 0, err
@@ -46,12 +49,12 @@ func (df *DataFile) ReadLogRecord(Offset int64) (*LogRecord, int64, error) {
 	// 特判！！！
 	// 如果读取到最大的 Header 长度已经超过了文件的长度，则只需要读取要文件的末尾即可
 	var headerBytes int64 = maxLogRecordHeaderSize
-	if Offset + maxLogRecordHeaderSize > fileSize {
-		headerBytes = fileSize - Offset
+	if offset + maxLogRecordHeaderSize > fileSize {
+		headerBytes = fileSize - offset
 	} 
 
 	// 获取 Header 的信息
-	headerBuf, err := df.readNBytes(headerBytes, Offset)
+	headerBuf, err := df.readNBytes(headerBytes, offset)
 	if err != nil {
 		return nil, 0, nil
 	}
@@ -68,12 +71,12 @@ func (df *DataFile) ReadLogRecord(Offset int64) (*LogRecord, int64, error) {
 
 	// 取出对应的 key 和 value 的长度
 	keySize, valueSize := int64(header.keySize), int64(header.valueSize)
+	// 计算日志记录的总长度
 	recordSize := headerSize + keySize + valueSize
-
 	logRecord := &LogRecord{Type: header.recordType}
 	// 开始读取用户实际存储的 key/value 数据
 	if keySize > 0 || valueSize > 0 {
-		kvBuf, err := df.readNBytes(Offset + headerSize, keySize + valueSize)
+		kvBuf, err := df.readNBytes(keySize + valueSize, offset + headerSize)
 		if err != nil {
 			return nil, 0, err
 		}
