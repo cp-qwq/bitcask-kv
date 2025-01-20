@@ -37,7 +37,7 @@ func TestDataFile_Write(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func TestDataFile_Close (t *testing.T) {
+func TestDataFile_Close(t *testing.T) {
 	dataFile, err := OpenDataFile(os.TempDir(), 123)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile)
@@ -67,8 +67,8 @@ func TestDataFile_ReadLogRecord(t *testing.T) {
 	assert.NotNil(t, dataFile)
 
 	// 只有一条LogRecord
-	rec1 := &LogRecord {
-		Key: []byte("name"),
+	rec1 := &LogRecord{
+		Key:   []byte("name"),
 		Value: []byte("bitcask kv go"),
 	}
 
@@ -81,10 +81,9 @@ func TestDataFile_ReadLogRecord(t *testing.T) {
 	assert.Equal(t, rec1, readRec1)
 	assert.Equal(t, size1, readSize1)
 
-
 	// 多条 LogRecord，从不同的位置读取
-	rec2 := &LogRecord {
-		Key: []byte("name"),
+	rec2 := &LogRecord{
+		Key:   []byte("name"),
 		Value: []byte("a new value"),
 	}
 	res2, size2 := EncodeLogRecord(rec2)

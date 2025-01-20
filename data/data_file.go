@@ -12,6 +12,7 @@ import (
 var (
 	ErrInvalidCRC = errors.New("invalid crc value, log record maybe corrupted")
 )
+
 const DataFileNameSuffix = ".data"
 
 // 数据文件
@@ -22,7 +23,7 @@ type DataFile struct {
 }
 
 func OpenDataFile(dirPath string, fileId uint32) (*DataFile, error) {
-	fileName := filepath.Join(dirPath, fmt.Sprintf("%09d", fileId) + DataFileNameSuffix)
+	fileName := filepath.Join(dirPath, fmt.Sprintf("%09d", fileId)+DataFileNameSuffix)
 
 	//初始化 IOManager 管理器接口
 	ioManager, err := fio.NewFileIOManager(fileName)
@@ -31,8 +32,8 @@ func OpenDataFile(dirPath string, fileId uint32) (*DataFile, error) {
 	}
 
 	return &DataFile{
-		FileId: fileId,
-		WriteOff: 0,
+		FileId:    fileId,
+		WriteOff:  0,
 		IoManager: ioManager,
 	}, nil
 }
@@ -49,9 +50,9 @@ func (df *DataFile) ReadLogRecord(offset int64) (*LogRecord, int64, error) {
 	// 特判！！！
 	// 如果读取到最大的 Header 长度已经超过了文件的长度，则只需要读取要文件的末尾即可
 	var headerBytes int64 = maxLogRecordHeaderSize
-	if offset + maxLogRecordHeaderSize > fileSize {
+	if offset+maxLogRecordHeaderSize > fileSize {
 		headerBytes = fileSize - offset
-	} 
+	}
 
 	// 获取 Header 的信息
 	headerBuf, err := df.readNBytes(headerBytes, offset)
@@ -76,7 +77,7 @@ func (df *DataFile) ReadLogRecord(offset int64) (*LogRecord, int64, error) {
 	logRecord := &LogRecord{Type: header.recordType}
 	// 开始读取用户实际存储的 key/value 数据
 	if keySize > 0 || valueSize > 0 {
-		kvBuf, err := df.readNBytes(keySize + valueSize, offset + headerSize)
+		kvBuf, err := df.readNBytes(keySize+valueSize, offset+headerSize)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -101,7 +102,7 @@ func (df *DataFile) Write(buf []byte) error {
 	}
 	df.WriteOff += int64(n)
 	return nil
-} 
+}
 
 func (df *DataFile) Sync() error {
 	return df.IoManager.Sync()
@@ -114,5 +115,5 @@ func (df *DataFile) Close() error {
 func (df *DataFile) readNBytes(n int64, offset int64) (b []byte, err error) {
 	b = make([]byte, n)
 	_, err = df.IoManager.Read(b, offset)
-	return 
+	return
 }

@@ -9,7 +9,7 @@ type FileIO struct {
 func NewFileIOManager(filename string) (*FileIO, error) {
 	fd, err := os.OpenFile(
 		filename,
-		os.O_CREATE | os.O_RDWR | os.O_APPEND, 
+		os.O_CREATE|os.O_RDWR|os.O_APPEND,
 		DataFilePerm,
 	)
 	if err != nil {
@@ -17,6 +17,7 @@ func NewFileIOManager(filename string) (*FileIO, error) {
 	}
 	return &FileIO{fd: fd}, nil
 }
+
 // Read 从文件的给定位置读取对应的数据
 func (fio *FileIO) Read(b []byte, Offset int64) (int, error) {
 	return fio.fd.ReadAt(b, Offset)
