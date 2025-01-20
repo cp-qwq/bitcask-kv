@@ -3,10 +3,19 @@ package bitcask_kv
 import "os"
 
 type Options struct {
-	DirPath      string // 数据库数据路径
-	DataFileSize int64  //数据文件大小
-	SyncWrite    bool   // 每次写数据都持久化
-	IndexType    IndexType //索引的类型
+	DirPath      string    // 数据库数据路径
+	DataFileSize int64     // 数据文件大小
+	SyncWrite    bool      // 每次写数据都持久化
+	IndexType    IndexType // 索引的类型
+}
+
+// IteratorOptions 索引迭代器的配置项
+type IteratorOptions struct {
+	// 遍历前缀为指定值的 key，默认为空
+	Prefix []byte
+
+	// 是否反向遍历，默认 false 是正向
+	Reverse bool
 }
 
 type IndexType = int8
@@ -19,9 +28,14 @@ const (
 	ART
 )
 
-var DefaultOptions = Options {
-	DirPath: os.TempDir(),
+var DefaultOptions = Options{
+	DirPath:      os.TempDir(),
 	DataFileSize: 256 * 1024 * 1024, // 256MB
-	SyncWrite: false,
-	IndexType: Btree,
+	SyncWrite:    false,
+	IndexType:    Btree,
+}
+
+var DefaultIteratorOptions = IteratorOptions{
+	Prefix:  nil,
+	Reverse: false,
 }
