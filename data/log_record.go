@@ -6,9 +6,7 @@ import (
 )
 
 type LogRecordType = byte
-
-// crc type keySize valueSize
-// 4  + 1    + 5     + 5 = 15
+ 
 const maxLogRecordHeaderSize = binary.MaxVarintLen32 + 5
 const (
 	LogRecordNormal LogRecordType = iota
@@ -26,12 +24,12 @@ type LogRecord struct {
 
 // 数据内存的索引，主要描述数据在磁盘上的位置
 type LogRecordPos struct {
-	Fid    uint32 //文件 id，表示存储的文件位置
-	Offset int64  //偏移量，表示将数据存储到了文件的哪个位置
+	Fid    uint32 // 文件 id，表示存储的文件位置
+	Offset int64  // 偏移量，表示将数据存储到了文件的哪个位置
 }
 
 type LogRecordHeader struct {
-	crc        uint32        //crc 校验值
+	crc        uint32        // crc 校验值
 	recordType LogRecordType // 标识 LogRecord 类型
 	keySize    uint32        // Key 的长度
 	valueSize  uint32        // Value 的长度
@@ -78,7 +76,25 @@ func EncodeLogRecord(logRecord *LogRecord) ([]byte, int64) {
 
 	return encBytes, int64(size)
 }
+// EncodeLogRecordPos 对位置信息进行编码
+func EncodeLogRecordPos(pos *LogRecordPos) []byte {
+	buf := make([]byte, binary.MaxVarintLen32 + binary.MaxVarintLen64) 
+	var index = 0
+	index += binary.PutVarint(buf[index:], int64(pos.Fid))
+	index += binary.PutVarint(buf[index:], pos.Offset)
+	return buf[:index]
+}
 
+func DecodeLogRecordPos(buf []byte) *LogRecordPos {
+	var index = 0
+	fileId, n := binary.Varint(buf[index:])
+	index += n
+	offset, _ := binary.Varint(buf[index:])
+	return &LogRecordPos{
+		Fid: uint32(fileId),
+		Offset: offset,
+	}
+}
 // 对字节数组中的 Header 信息进行解码
 func decodeLogRecordHeader(buf []byte) (*LogRecordHeader, int64) {
 	if len(buf) <= 4 {

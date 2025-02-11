@@ -87,8 +87,7 @@ func TestDB_WriteBatch2(t *testing.T) {
 // 测试事务提交过程中宕机情况
 func TestDB_WriteBatch3(t *testing.T) {
 	opts := DefaultOptions
-	// dir, _ := os.MkdirTemp("", "bitcask-go-batch-3")
-	dir := "\tmp"
+	dir := "/tmp/bitcask-go-batch-3"
 	opts.DirPath = dir
 	db, err := Open(opts)
 	//defer destroyDB(db)
@@ -98,13 +97,13 @@ func TestDB_WriteBatch3(t *testing.T) {
 	keys := db.ListKeys()
 	t.Log(len(keys))
 
-	//wbOpts := DefaultWriteBatchOptions
-	//wbOpts.MaxBatchNum = 10000000
-	//wb := db.NewWriteBatch(wbOpts)
-	//for i := 0; i < 500000; i++ {
-	//	err := wb.Put(utils.GetTestKey(i), utils.RandomValue(1024))
-	//	assert.Nil(t, err)
-	//}
-	//err = wb.Commit()
-	//assert.Nil(t, err)
+	// wbOpts := DefaultWriteBatchOptions
+	// wbOpts.MaxBatchNum = 10000000
+	// wb := db.NewWriteBatch(wbOpts)
+	// for i := 0; i < 500000; i++ {
+	// 	err := wb.Put(utils.GetTestKey(i), utils.RandomValue(1024))
+	// 	assert.Nil(t, err)
+	// }
+	// err = wb.Commit()
+	// assert.Nil(t, err)
 }
