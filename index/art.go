@@ -8,32 +8,32 @@ import (
 	"sync"
 )
 
-// AdaptiveRadixTreeIndex 自适应基数树索引实现
+// AdaptiveRadixTree 自适应基数树索引实现
 // https://github.com/plar/go-adaptive-radix-tree
-type AdaptiveRadixTreeIndex struct {
+type AdaptiveRadixTree struct {
 	tree goart.Tree
 	lock *sync.RWMutex
 }
 
 // NewART 创建新索引实例
-func NewART() *AdaptiveRadixTreeIndex {
-	return &AdaptiveRadixTreeIndex{
+func NewART() *AdaptiveRadixTree {
+	return &AdaptiveRadixTree{
 		tree: goart.New(),
 		lock: new(sync.RWMutex),
 	}
 }
 
-func (art *AdaptiveRadixTreeIndex) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
-	art.lock.Lock()
-	oldValue, _ := art.tree.Insert(key, pos)
-	art.lock.Unlock()
+func (a *AdaptiveRadixTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	oldValue, _ := a.tree.Insert(key, pos)
 	if oldValue == nil {
 		return nil
 	}
 	return oldValue.(*data.LogRecordPos)
 }
 
-func (art *AdaptiveRadixTreeIndex) Get(key []byte) *data.LogRecordPos {
+func (art *AdaptiveRadixTree) Get(key []byte) *data.LogRecordPos {
 	art.lock.RLock()
 	defer art.lock.RUnlock()
 	value, found := art.tree.Search(key)
@@ -43,29 +43,29 @@ func (art *AdaptiveRadixTreeIndex) Get(key []byte) *data.LogRecordPos {
 	return value.(*data.LogRecordPos)
 }
 
-func (art *AdaptiveRadixTreeIndex) Delete(key []byte) (*data.LogRecordPos, bool) {
-	art.lock.Lock()
-	oldValue, deleted := art.tree.Delete(key)
-	art.lock.Unlock()
+func (a *AdaptiveRadixTree) Delete(key []byte) (*data.LogRecordPos, bool) {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	oldValue, deleted := a.tree.Delete(key)
 	if oldValue == nil {
 		return nil, false
 	}
 	return oldValue.(*data.LogRecordPos), deleted
 }
 
-func (art *AdaptiveRadixTreeIndex) Size() int {
+func (art *AdaptiveRadixTree) Size() int {
 	art.lock.RLock()
 	size := art.tree.Size()
 	art.lock.RUnlock()
 	return size
 }
 
-func (art *AdaptiveRadixTreeIndex) Close() error {
+func (art *AdaptiveRadixTree) Close() error {
 	// todo 优化点, 释放内存
 	return nil
 }
 
-func (art *AdaptiveRadixTreeIndex) Iterator(reverse bool) Iterator {
+func (art *AdaptiveRadixTree) Iterator(reverse bool) Iterator {
 	art.lock.RLock()
 	defer art.lock.RUnlock()
 	return newARTIterator(art.tree, reverse)

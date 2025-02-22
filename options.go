@@ -3,12 +3,13 @@ package bitcask_kv
 import "os"
 
 type Options struct {
-	DirPath       string    // 数据库数据路径
-	DataFileSize  int64     // 数据文件大小
-	SyncWrites    bool      // 每次写数据是否持久化
-	BytesPerSync  uint      // 累计写了多少字节后进行持久化
-	IndexType     IndexType // 索引的类型
-	MMapAtStartup bool      // 启动时是否使用 MMap 加载数据
+	DirPath            string    // 数据库数据路径
+	DataFileSize       int64     // 数据文件大小
+	SyncWrites         bool      // 每次写数据是否持久化
+	BytesPerSync       uint      // 累计写了多少字节后进行持久化
+	IndexType          IndexType // 索引的类型
+	MMapAtStartup      bool      // 启动时是否使用 MMap 加载数据
+	DataFileMergeRatio float32   // 数据文件合并的阈值
 }
 
 // IteratorOptions 索引迭代器的配置项
@@ -48,6 +49,7 @@ var DefaultOptions = Options{
 	BytesPerSync:  0,
 	IndexType:     Btree,
 	MMapAtStartup: true,
+	DataFileMergeRatio: 0.5,
 }
 
 var DefaultIteratorOptions = IteratorOptions{

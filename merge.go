@@ -2,6 +2,7 @@ package bitcask_kv
 
 import (
 	"bitcask-kv/data"
+	"bitcask-kv/utils"
 	"io"
 	"os"
 	"path/filepath"
@@ -29,6 +30,30 @@ func (db *DB) Merge() error {
 		db.mtx.Unlock()
 		return ErrMergeIsProgress
 	}
+
+	// 查看可以 merge 的数量是否达到了阈值
+	totalSize, err := utils.DirSize(db.options.DirPath)
+	if err != nil {
+		db.mtx.Unlock()
+		return err
+	}
+
+	if float32(db.reclaimSize)/float32(totalSize) < db.options.DataFileMergeRatio {
+		db.mtx.Unlock()
+		return ErrMergeRationUnreached
+	}
+
+	availableDiskSize, err := utils.AvailableDiskSize()
+	if err != nil {
+		db.mtx.Unlock()
+		return err
+	}
+
+	if uint64(totalSize-db.reclaimSize) >= availableDiskSize {
+		db.mtx.Unlock()
+		return ErrNoEnoughSpaceForMerge
+	}
+
 	db.isMerging = true
 	defer func() {
 		db.isMerging = false
