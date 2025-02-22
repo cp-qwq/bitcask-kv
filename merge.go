@@ -4,7 +4,6 @@ import (
 	"bitcask-kv/data"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -50,7 +49,6 @@ func (db *DB) Merge() error {
 	}
 	// 记录最近没有参与 merge 文件的 id
 	nonMergeFileId := db.activeFile.FileId
-
 
 	// 取出所有需要 merge 的文件
 	var mergeFiles []*data.DataFile
@@ -127,7 +125,7 @@ func (db *DB) Merge() error {
 	if err := hintFile.Sync(); err != nil {
 		return err
 	}
-
+	
 	if err := mergeDB.Sync(); err != nil {
 		return err
 	}
@@ -138,8 +136,8 @@ func (db *DB) Merge() error {
 		return err
 	}
 
-	mergeFinRecord := &data.LogRecord {
-		Key: []byte(mergeFinishedKey),
+	mergeFinRecord := &data.LogRecord{
+		Key:   []byte(mergeFinishedKey),
 		Value: []byte(strconv.Itoa(int(nonMergeFileId))),
 	}
 
@@ -154,9 +152,9 @@ func (db *DB) Merge() error {
 }
 
 func (db *DB) getMergePath() string {
-	dir := path.Dir(path.Clean(db.options.DirPath))
-	base := path.Base(db.options.DirPath)
-	return filepath.Join(dir + base + mergeDirName)
+	dir := filepath.Dir(filepath.Clean(db.options.DirPath))
+	base := filepath.Base(db.options.DirPath)
+	return filepath.Join(dir, base + mergeDirName)
 }
 
 func (db *DB) loadMergeFiles() error {
@@ -165,7 +163,7 @@ func (db *DB) loadMergeFiles() error {
 	if _, err := os.Stat(mergePath); os.IsNotExist(err) {
 		return err
 	}
-	
+
 	defer func() {
 		_ = os.RemoveAll(mergePath)
 	}()
@@ -182,6 +180,9 @@ func (db *DB) loadMergeFiles() error {
 		if entry.Name() == data.MergeFinishedFileName {
 			mergeFinished = true
 		}
+		if entry.Name() == data.SeqNoFileName {
+			continue
+		}
 		mergeFileNames = append(mergeFileNames, entry.Name())
 	}
 
@@ -197,7 +198,7 @@ func (db *DB) loadMergeFiles() error {
 
 	// 删除旧的数据文件
 	var fileId uint32 = 0
-	for ; fileId < nonMergeFileId; fileId ++ {
+	for ; fileId < nonMergeFileId; fileId++ {
 		fileName := data.GetDataFileName(db.options.DirPath, fileId)
 		if _, err := os.Stat(fileName); err == nil {
 			if err := os.Remove(fileName); err != nil {
@@ -254,9 +255,9 @@ func (db *DB) loadIndexFromHintFile() error {
 		logRecord, size, err := hintFile.ReadLogRecord(offset)
 		if err != nil {
 			if err == io.EOF {
-				break;
+				break
 			}
-			continue;
+			continue
 		}
 
 		// 解码拿到实际的位置索引

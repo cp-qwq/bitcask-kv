@@ -10,8 +10,10 @@ import (
 type Indexer interface {
 	// 向索引中存储 key 对应的数据位置信息
 	Put(key []byte, pos *data.LogRecordPos) bool
+	
 	// 根据 key 取出对应的索引位置信息
 	Get(key []byte) *data.LogRecordPos
+
 	// 根据 key 删除对应的索引位置信息
 	Delete(key []byte) bool
 
@@ -30,15 +32,20 @@ const (
 
 	// ART 自适应基数树索引
 	ART
+
+	// BPTree B+ 树索引
+	BPTree
 )
 
-func NewIndexer(typ IndexType) Indexer {
+func NewIndexer(typ IndexType, dirPath string, sync bool) Indexer {
 	switch typ {
 	case Btree:
 		return NewBTree()
 	case ART:
 		// TODO
 		return nil
+	case BPTree:
+		return NewBPlusTree(dirPath, sync)
 	default:
 		panic("unsupported index type")
 	}

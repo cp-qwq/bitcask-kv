@@ -17,6 +17,7 @@ const (
 	DataFileNameSuffix    = ".data"
 	HintFileName          = "hint-index"
 	MergeFinishedFileName = "merge-finished"
+	SeqNoFileName = "seq-no"
 )
 
 // 数据文件
@@ -26,18 +27,27 @@ type DataFile struct {
 	IoManager fio.IOManager // io 读写管理
 }
 
+// OpenDataFile 打开新的数据文件
 func OpenDataFile(dirPath string, fileId uint32) (*DataFile, error) {
 	fileName := GetDataFileName(dirPath, fileId)
 	return newDataFile(fileName, fileId)
 }
 
+// OpenHintFile 打开 hint 索引文件
 func OpenHintFile(dirPath string) (*DataFile, error) {
 	fileName := filepath.Join(dirPath, HintFileName)
 	return newDataFile(fileName, 0)
 }
 
+// OpenMergeFinishedFile 打开标识 merge 完成的文件
 func OpenMergeFinishedFile(dirPath string) (*DataFile, error) {
 	fileName := filepath.Join(dirPath, MergeFinishedFileName)
+	return newDataFile(fileName, 0)
+}
+
+// OpenSeqNoFile 打开存储事务序列号的文件
+func OpenSeqNoFile(dirPath string) (*DataFile, error) {
+	fileName := filepath.Join(dirPath, SeqNoFileName)
 	return newDataFile(fileName, 0)
 }
 
