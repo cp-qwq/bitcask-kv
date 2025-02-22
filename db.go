@@ -2,6 +2,7 @@ package bitcask_kv
 
 import (
 	"bitcask-kv/data"
+	"bitcask-kv/fio"
 	"bitcask-kv/index"
 	"errors"
 	"fmt"
@@ -31,9 +32,10 @@ type DB struct {
 	index           index.Indexer             // 内存索引
 	seqNo           uint64                    // 事务序列号
 	isMerging       bool                      // 是否正在 merge
-	seqNoFileExists bool                      //存储事务序列号文件是否存在
+	seqNoFileExists bool                      // 存储事务序列号文件是否存在
 	isInitial       bool                      // 是否第一次初始化此数据目录
 	filelock        *flock.Flock              // 文件锁保证多进程之间的互斥
+	bytesWrite      uint                      // 累计写了多少个字节
 }
 
 // Open 打开 bitcask 存储引擎实例
@@ -67,7 +69,7 @@ func Open(options Options) (*DB, error) {
 		options:    options,
 		mtx:        new(sync.RWMutex),
 		olderFiles: make(map[uint32]*data.DataFile),
-		index:      index.NewIndexer(options.IndexType, options.DirPath, options.SyncWrite),
+		index:      index.NewIndexer(options.IndexType, options.DirPath, options.SyncWrites),
 		isInitial:  isInitial,
 		filelock:   filelock,
 	}
@@ -92,6 +94,13 @@ func Open(options Options) (*DB, error) {
 		// 从数据文件中加载索引
 		if err := db.lodeIndexFromDataFiles(); err != nil {
 			return nil, err
+		}
+
+		// 重置 IO 类型为标准文件 IO
+		if db.options.MMapAtStartup {
+			if err := db.resetIoType(); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -309,7 +318,6 @@ func (db *DB) appendLogRecordWithLock(logRecord *data.LogRecord) (*data.LogRecor
 // 追加写数据到活跃文件中
 func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
 	// 判断当前活跃数据文件是否存在，因为数据库在没有写入的时候是没有文件生成的
-
 	// 如果为空则初始化数据文件
 	if db.activeFile == nil {
 		if err := db.setActiveDataFile(); err != nil {
@@ -321,7 +329,7 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 	encRecord, size := data.EncodeLogRecord(logRecord)
 
 	// 如果写入的数据已经达到了活跃文件的阈值，则关闭活跃文件，并打开新的文件
-	if db.activeFile.WriteOff+size > db.options.DataFileSize {
+	if db.activeFile.WriteOff + size > db.options.DataFileSize {
 		// 先持久化数据文件，保证已有的数据持久化到磁盘当中
 		if err := db.activeFile.Sync(); err != nil {
 			return nil, err
@@ -341,10 +349,20 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 		return nil, err
 	}
 
+	db.bytesWrite += uint(size)
+
 	// 根据用户配置决定是否持久化
-	if db.options.SyncWrite {
+	var needSync = db.options.SyncWrites
+	if !needSync && db.options.BytesPerSync > 0 && db.bytesWrite >= db.options.BytesPerSync {
+		needSync = true
+	}
+	if needSync {
 		if err := db.activeFile.Sync(); err != nil {
 			return nil, err
+		}
+		// 清空累计值
+		if db.bytesWrite > 0 {
+			db.bytesWrite = 0
 		}
 	}
 
@@ -363,7 +381,7 @@ func (db *DB) setActiveDataFile() error {
 		initialFileId = db.activeFile.FileId + 1
 	}
 
-	dataFile, err := data.OpenDataFile(db.options.DirPath, initialFileId)
+	dataFile, err := data.OpenDataFile(db.options.DirPath, initialFileId, fio.StandardIO)
 	if err != nil {
 		return err
 	}
@@ -426,8 +444,12 @@ func (db *DB) lodeDataFiles() error {
 	db.fileIds = fileIds
 
 	// 遍历每一个文件Id，打开对应的数据文件
-	for i, fid := range fileIds {
-		dataFile, err := data.OpenDataFile(db.options.DirPath, uint32(fid))
+	for i, fid := range fileIds { 
+		ioType := fio.StandardIO
+		if db.options.MMapAtStartup {
+			ioType = fio.MemoryMap
+		}
+		dataFile, err := data.OpenDataFile(db.options.DirPath, uint32(fid), ioType)
 		if err != nil {
 			return err
 		}
@@ -542,5 +564,23 @@ func (db *DB) lodeIndexFromDataFiles() error {
 	}
 
 	db.seqNo = currentSeqNo
+	return nil
+}
+
+// 将数据文件的 IO 类型设置为标准文件IO
+func (db *DB) resetIoType() error {
+	if db.activeFile == nil {
+		return nil
+	}
+
+	if err := db.activeFile.SetIOManager(db.options.DirPath, fio.StandardIO); err != nil {
+		return err
+	}
+	
+	for _, dataFile := range db.olderFiles {
+		if err := dataFile.SetIOManager(db.options.DirPath, fio.StandardIO); err != nil {
+			return err
+		}
+	}
 	return nil
 }
