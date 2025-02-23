@@ -88,7 +88,7 @@ func (db *DB) Merge() error {
 
 	mergePath := db.getMergePath()
 	// 如果目录存在，说明发生过 merge，将其删除
-	if _, err := os.Stat(mergePath); err != nil {
+	if _, err := os.Stat(mergePath); err == nil {
 		if err := os.RemoveAll(mergePath); err != nil {
 			return err
 		}
@@ -208,6 +208,9 @@ func (db *DB) loadMergeFiles() error {
 		if entry.Name() == data.SeqNoFileName {
 			continue
 		}
+		if entry.Name() == fileLockName {
+			continue
+		}
 		mergeFileNames = append(mergeFileNames, entry.Name())
 	}
 
@@ -258,6 +261,11 @@ func (db *DB) getNonMergeFileId(dirPath string) (uint32, error) {
 		return 0, err
 	}
 
+	err = mergeFinishedFile.Close() // Warning add
+	if err != nil {
+		return 0, err
+	}
+
 	return uint32(nonMergeFiled), nil
 }
 
@@ -271,7 +279,7 @@ func (db *DB) loadIndexFromHintFile() error {
 	// 打开 hint 的索引文件
 	hintFile, err := data.OpenHintFile(db.options.DirPath)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	// 读取文件中的索引
@@ -282,7 +290,7 @@ func (db *DB) loadIndexFromHintFile() error {
 			if err == io.EOF {
 				break
 			}
-			continue
+			return err
 		}
 
 		// 解码拿到实际的位置索引

@@ -90,23 +90,20 @@ func Open(options Options) (*DB, error) {
 	}
 
 	// 加载数据文件
-	if err := db.lodeDataFiles(); err != nil {
+	if err := db.loadDataFiles(); err != nil {
 		return nil, err
 	}
 
-	// B+树索引不需要从数据文件加载索引
+	// B+树不需要从数据文件中建造索引
 	if options.IndexType != BPTree {
-		// 从 hint 索引文件中加载索引
 		if err := db.loadIndexFromHintFile(); err != nil {
 			return nil, err
 		}
 
-		// 从数据文件中加载索引
-		if err := db.lodeIndexFromDataFiles(); err != nil {
+		if err := db.loadIndexFromDataFiles(); err != nil {
 			return nil, err
 		}
 
-		// 重置 IO 类型为标准文件 IO
 		if db.options.MMapAtStartup {
 			if err := db.resetIoType(); err != nil {
 				return nil, err
@@ -114,10 +111,16 @@ func Open(options Options) (*DB, error) {
 		}
 	}
 
-	// 取出当前的事务序列号
 	if options.IndexType == BPTree {
 		if err := db.loadSeqNo(); err != nil {
 			return nil, err
+		}
+		if db.activeFile != nil {
+			size, err := db.activeFile.IoManager.Size()
+			if err != nil {
+				return nil, err
+			}
+			db.activeFile.WriteOff = size
 		}
 	}
 
@@ -139,6 +142,12 @@ func (db *DB) Close() error {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
+	// 关闭索引
+	err := db.index.Close()
+	if err != nil {
+		return err
+	}
+
 	// 保存当前事务序列号
 	seqNoFile, err := data.OpenSeqNoFile(db.options.DirPath)
 	if err != nil {
@@ -150,11 +159,13 @@ func (db *DB) Close() error {
 		Value: []byte(strconv.FormatUint(db.seqNo, 10)),
 	}
 	encRecord, _ := data.EncodeLogRecord(record)
-	seqNoFile.Write(encRecord)
 	if err := seqNoFile.Write(encRecord); err != nil {
 		return err
 	}
 	if err := seqNoFile.Sync(); err != nil {
+		return err
+	}
+	if err := seqNoFile.Close(); err != nil {
 		return err
 	}
 
@@ -258,7 +269,7 @@ func (db *DB) Delete(key []byte) error {
 	// 然后写入到数据文件中
 	pos, err := db.appendLogRecordWithLock(logRecord)
 	if err != nil {
-		return nil
+		return err
 	}
 	db.reclaimSize += int64(pos.Size)
 
@@ -346,7 +357,7 @@ func (db *DB) getValueByPosition(logRecordPos *data.LogRecordPos) ([]byte, error
 	}
 
 	if logRecord.Type == data.LogRecordDeleted {
-		return nil, ErrKeyNotFound
+		return nil, ErrDataFileNotFound
 	}
 
 	return logRecord.Value, nil
@@ -412,6 +423,7 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 	pos := &data.LogRecordPos{
 		Fid:    db.activeFile.FileId,
 		Offset: writeOff,
+		Size: uint32(size),
 	}
 	return pos, nil
 }
@@ -468,7 +480,7 @@ func (db *DB) loadSeqNo() error {
 	return nil
 }
 
-func (db *DB) lodeDataFiles() error {
+func (db *DB) loadDataFiles() error {
 	dirEntries, err := os.ReadDir(db.options.DirPath)
 	if err != nil {
 		return err
@@ -515,7 +527,7 @@ func (db *DB) lodeDataFiles() error {
 }
 
 // 从数据文件中加载索引
-func (db *DB) lodeIndexFromDataFiles() error {
+func (db *DB) loadIndexFromDataFiles() error {
 	// 说明当前是一个空的数据库，直接返回
 	if len(db.fileIds) == 0 {
 		return nil
@@ -524,7 +536,7 @@ func (db *DB) lodeIndexFromDataFiles() error {
 	// 查看是否发生过 merge
 	hasMerge, nonMergeFileId := false, uint32(0)
 	mergeFinFileName := filepath.Join(db.options.DirPath, data.MergeFinishedFileName)
-	if _, err := os.Stat(mergeFinFileName); err != nil {
+	if _, err := os.Stat(mergeFinFileName); err == nil {
 		fid, err := db.getNonMergeFileId(db.options.DirPath)
 		if err != nil {
 			return err
@@ -598,11 +610,7 @@ func (db *DB) lodeIndexFromDataFiles() error {
 					})
 				}
 			}
-			// 更新事务序列号
-			if seqNo > currentSeqNo {
-				currentSeqNo = seqNo
-			}
-
+			currentSeqNo = max(currentSeqNo, seqNo)
 			// 递增 Offset，下一次从新的位置开始读取
 			offset += size
 		}

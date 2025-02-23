@@ -20,7 +20,8 @@ func NewBTree() *BTree {
 		tree: btree.New(32),
 		lock: new(sync.RWMutex),
 	}
-}	
+}
+
 func (bt *BTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
 	it := &Item{key: key, pos: pos}
 	bt.lock.Lock()
@@ -40,6 +41,7 @@ func (bt *BTree) Get(key []byte) *data.LogRecordPos {
 	}
 	return btreeItem.(*Item).pos
 }
+
 func (bt *BTree) Delete(key []byte) (*data.LogRecordPos, bool) {
 	it := &Item{key: key}
 	bt.lock.Lock()
@@ -53,6 +55,10 @@ func (bt *BTree) Delete(key []byte) (*data.LogRecordPos, bool) {
 
 func (bt *BTree) Size() int {
 	return bt.tree.Len()
+}
+
+func (bt *BTree) Close() error {
+	return nil
 }
 
 func (bt *BTree) Iterator(reverse bool) Iterator {

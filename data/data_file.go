@@ -17,7 +17,7 @@ const (
 	DataFileNameSuffix    = ".data"
 	HintFileName          = "hint-index"
 	MergeFinishedFileName = "merge-finished"
-	SeqNoFileName = "seq-no"
+	SeqNoFileName         = "seq-no"
 )
 
 // 数据文件
@@ -88,7 +88,7 @@ func (df *DataFile) ReadLogRecord(offset int64) (*LogRecord, int64, error) {
 	// 获取 Header 的信息
 	headerBuf, err := df.readNBytes(headerBytes, offset)
 	if err != nil {
-		return nil, 0, nil
+		return nil, 0, err
 	}
 
 	header, headerSize := decodeLogRecordHeader(headerBuf)
@@ -138,7 +138,7 @@ func (df *DataFile) Write(buf []byte) error {
 // WriteHintRecord 写入索引信息到 hint 文件中
 func (df *DataFile) WriteHintRecord(key []byte, pos *LogRecordPos) error {
 	record := &LogRecord{
-		Key: key,
+		Key:   key,
 		Value: EncodeLogRecordPos(pos),
 	}
 

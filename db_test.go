@@ -1,9 +1,11 @@
 package bitcask_kv
+
 import (
 	"bitcask-kv/utils"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // 测试完成之后销毁 DB 数据目录

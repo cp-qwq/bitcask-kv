@@ -33,7 +33,7 @@ func handlePut(ctx *gin.Context) {
 	
 	for k, v := range data {
 		err := db.Put([]byte(k), []byte(v))
-		fmt.Println("key: " + k + "value: " + v)
+		fmt.Println("key: " + k + " " + "value: " + v)
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
 			return
@@ -51,7 +51,7 @@ func handleGet(ctx *gin.Context) {
 	ctx.Header("Content-Type", "application/json")
 	ctx.JSON(http.StatusOK, gin.H{
 		"key":   key,
-		"value": value,
+		"value": string(value),
 	})
 }
 
