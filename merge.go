@@ -150,7 +150,7 @@ func (db *DB) Merge() error {
 	if err := hintFile.Sync(); err != nil {
 		return err
 	}
-	
+
 	if err := mergeDB.Sync(); err != nil {
 		return err
 	}
@@ -179,14 +179,14 @@ func (db *DB) Merge() error {
 func (db *DB) getMergePath() string {
 	dir := filepath.Dir(filepath.Clean(db.options.DirPath))
 	base := filepath.Base(db.options.DirPath)
-	return filepath.Join(dir, base + mergeDirName)
+	return filepath.Join(dir, base+mergeDirName)
 }
 
 func (db *DB) loadMergeFiles() error {
 	mergePath := db.getMergePath()
 	// 如果不存在直接返回
 	if _, err := os.Stat(mergePath); os.IsNotExist(err) {
-		return err
+		return nil
 	}
 
 	defer func() {
