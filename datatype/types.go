@@ -10,14 +10,17 @@ import (
 var (
 	ErrWrongTypeOperation = errors.New("WRONGTYPE Operation against a key holding the wrong king of value")
 )
+
 type DataType = byte
+
 const (
 	String DataType = iota
 	Hash
 	Set
 	List
 	Zset
-) 
+)
+
 type DataTypeService struct {
 	db *bitcask.DB
 }
@@ -31,6 +34,43 @@ func NewDataTypeService(options bitcask.Options) (*DataTypeService, error) {
 	return &DataTypeService{db: db}, nil
 }
 
+func (dts *DataTypeService) findMetadata(key []byte, typ DataType) (*metadata, error) {
+	metaBuf, err := dts.db.Get(key)
+	if err != nil && err != bitcask.ErrKeyNotFound {
+		return nil, err
+	}
+
+	var meta *metadata
+	var exist = true
+	if err == bitcask.ErrKeyNotFound {
+		exist = false
+	} else {
+		meta = decodeMetadata(metaBuf)
+		// 判断数据类型
+		if meta.dataType != typ {
+			return nil, ErrWrongTypeOperation
+		}
+
+		// 判断过期时间
+		if meta.expire != 0 && meta.expire <= time.Now().UnixNano() {
+			exist = false
+		}
+	}
+
+	if !exist {
+		meta = &metadata{
+			dataType: typ,
+			expire:   0,
+			version:  time.Now().UnixNano(),
+			size:     0,
+		}
+		if typ == List {
+			meta.head = initialListMark
+			meta.tail = initialListMark
+		}
+	}
+	return meta, nil
+}
 
 // ========================= String 数据类型 ========================
 
@@ -40,7 +80,7 @@ func (dts *DataTypeService) Set(key []byte, ttl time.Duration, value []byte) err
 	}
 
 	// 编码 value ：type + expire + payload
-	buf := make([]byte, binary.MaxVarintLen64 + 1)
+	buf := make([]byte, binary.MaxVarintLen64+1)
 	buf[0] = String
 	var index = 1
 	var expire int64 = 0
@@ -48,7 +88,7 @@ func (dts *DataTypeService) Set(key []byte, ttl time.Duration, value []byte) err
 		expire = time.Now().Add(ttl).UnixNano()
 	}
 	index += binary.PutVarint(buf[index:], expire)
-	encValue := make([]byte, index + len(value))
+	encValue := make([]byte, index+len(value))
 	copy(encValue[:index], buf[:index])
 	copy(encValue[index:], value)
 
@@ -78,3 +118,94 @@ func (dts *DataTypeService) Get(key []byte) ([]byte, error) {
 
 	return encValue[index:], err
 }
+
+// ========================= Hash 数据类型 ========================
+func (dts *DataTypeService) HSet(key, field, value []byte) (bool, error) {
+	// 先查找元数据
+	meta, err := dts.findMetadata(key, Hash)
+	if err != nil {
+		return false, err
+	}
+
+	// 构造 Hash 数据部分的 key
+	hk := &hashInternalKy{
+		key:     key,
+		filed:   field,
+		version: meta.version,
+	}
+
+	encKey := hk.encode()
+
+	// 先查是否存在
+	var exist = true
+	if _, err := dts.db.Get(encKey); err == bitcask.ErrKeyNotFound {
+		exist = false
+	}
+
+	wb := dts.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+	// 不存在则更新元数据
+	if !exist {
+		meta.size++
+		_ = wb.Put(key, meta.encode())
+	}
+	_ = wb.Put(encKey, value)
+	if err = wb.Commit(); err != nil {
+		return false, err
+	}
+	return !exist, err
+}
+
+func (dts *DataTypeService) HGet(key, field []byte) ([]byte, error) {
+	meta, err := dts.findMetadata(key, Hash)
+	if err != nil {
+		return nil, err
+	}
+	if meta.size == 0 {
+		return nil, nil
+	}
+
+	hk := &hashInternalKy{
+		key:     key,
+		filed:   field,
+		version: meta.version,
+	}
+
+	return dts.db.Get(hk.encode())
+}
+
+func (dts *DataTypeService) HDel(key, field []byte) (bool, error) {
+	meta, err := dts.findMetadata(key, Hash)
+	if err != nil {
+		return false, err
+	}
+	if meta.size == 0 {
+		return false, nil
+	}
+
+	hk := &hashInternalKy{
+		key:     key,
+		filed:   field,
+		version: meta.version,
+	}
+
+	// 先查看是否存在
+	encKey := hk.encode()
+	var exist = true
+	if _, err = dts.db.Get(encKey); errors.Is(err, bitcask.ErrKeyNotFound) {
+		exist = false
+	}
+
+	if exist {
+		wb := dts.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+		meta.size--
+		_ = wb.Put(key, meta.encode())
+		_ = wb.Delete(encKey)
+		if err = wb.Commit(); err != nil {
+			return false, err
+		}
+	}
+
+	return exist, nil
+}
+
+
