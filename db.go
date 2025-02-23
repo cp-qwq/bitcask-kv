@@ -204,6 +204,12 @@ func (db *DB) Stat() *Stat {
 	}
 }
 
+func (db *DB) Backup(dir string) error {
+	db.mtx.RLock()
+	defer db.mtx.Unlock()
+	return utils.CopyDir(db.options.DirPath, dir, []string{fileLockName})
+}
+
 // Put 写入 Key/Value 数据，key 不能为空
 func (db *DB) Put(key []byte, value []byte) error {
 	// 判断 key 是否为空
