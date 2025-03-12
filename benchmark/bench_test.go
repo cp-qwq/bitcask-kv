@@ -1,5 +1,4 @@
 package benchmark
-
 import (
 	bitcask "bitcask-kv"
 	"bitcask-kv/utils"

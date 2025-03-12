@@ -24,7 +24,7 @@ func (md *metadata) encode() []byte {
 	var size = maxMetadataSize
 	if md.dataType == List {
 		size += extraListMetSize
-	}	
+	}
 
 	buf := make([]byte, size)
 	buf[0] = md.dataType
@@ -97,7 +97,7 @@ func (hk *hashInternalKy) encode() []byte {
 type setInternalKey struct {
 	key     []byte
 	version int64
-	member  []byte
+	member  []byte // 直接讲member存在内部key里面，所以保证了不会重复
 }
 
 func (sk *setInternalKey) encode() []byte {
@@ -120,5 +120,27 @@ func (sk *setInternalKey) encode() []byte {
 	return buf
 }
 
+// List 类型的内部key
+type listInternalKey struct {
+	key     []byte
+	version int64
+	index   uint64
+}
 
+func (lk *listInternalKey) encode() []byte {
+	buf := make([]byte, len(lk.key)+8+8)
 
+	// key
+	var index = 0
+	copy(buf[index:index+len(lk.key)], lk.key)
+	index += len(lk.key)
+
+	// version
+	binary.LittleEndian.PutUint64(buf[index:index+8], uint64(lk.version))
+	index += 8
+
+	// index
+	binary.LittleEndian.PutUint64(buf[index:], lk.index)
+
+	return buf
+}
