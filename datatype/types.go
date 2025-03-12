@@ -2,6 +2,7 @@ package datatype
 
 import (
 	bitcask "bitcask-kv"
+	"bitcask-kv/utils"
 	"encoding/binary"
 	"errors"
 	"time"
@@ -339,7 +340,7 @@ func (dts *DataTypeService) pushInner(key, element []byte, isLeft bool) (uint32,
 	}
 	_ = wb.Put(key, meta.encode())
 	_ = wb.Put(lk.encode(), element)
-	if err = wb.Commit(); err != nil {
+	if err := wb.Commit(); err != nil {
 		return 0, err
 	}
 
@@ -376,16 +377,104 @@ func (dts *DataTypeService) popInner(key []byte, isLeft bool) ([]byte, error) {
 	}
 
 	// 仅更新元数据即可
-	// todo 未释放删除元素占用内存
 	meta.size--
 	if isLeft {
 		meta.head++
 	} else {
 		meta.tail--
 	}
-	if err = dts.db.Put(key, meta.encode()); err != nil {
+	wb := dts.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+	_ = wb.Put(key, meta.encode())
+	_ = wb.Delete(lk.encode())
+	if err := wb.Commit(); err != nil {
 		return nil, err
 	}
-
 	return element, nil
+}
+
+// ======================= ZSet 数据结构 =======================
+
+// ZAdd 集合新增元素
+func (dts *DataTypeService) ZAdd(key []byte, score float64, member []byte) (bool, error) {
+	// 查询元数据信息
+	meta, err := dts.findMetadata(key, Zset)
+	if err != nil {
+		return false, err
+	}
+
+	// 构造数据部分 key 实例
+	zk := &zsetInternalKey{
+		key:     key,
+		version: meta.version,
+		score:   score,
+		member:  member,
+	}
+
+	var exist = true
+	// 查询是否已存在
+	value, err := dts.db.Get(zk.encodeWithMember())
+	if err != nil && err != bitcask.ErrKeyNotFound {
+		return false, err
+	}
+	if err == bitcask.ErrKeyNotFound {
+		exist = false
+	}
+	if exist {
+		if score == utils.FloatFromBytes(value) {
+			return false, nil
+		}
+	}
+
+	// 涉及更新数据和元数据两步操作, 需保证原子性
+	wb := dts.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+	if !exist {
+		// 元素不存在进行新增, 更新元数据
+		meta.size++
+		_ = wb.Put(key, meta.encode())
+	}
+	if exist {
+		// 元素已存在时需进行覆盖, 删除原元素
+		oldKey := &zsetInternalKey{
+			key:     key,
+			version: meta.version,
+			member:  member,
+			score:   utils.FloatFromBytes(value),
+		}
+		_ = wb.Delete(oldKey.encodeWithScore())
+	}
+	// 新增元素
+	_ = wb.Put(zk.encodeWithMember(), utils.Float64ToBytes(score))
+	_ = wb.Put(zk.encodeWithScore(), nil)
+	if err = wb.Commit(); err != nil {
+		return false, err
+	}
+
+	return !exist, nil
+}
+
+// ZScore 查询指定元素的 score 值
+func (dts *DataTypeService) ZScore(key []byte, member []byte) (float64, error) {
+	// 查询元数据信息
+	meta, err := dts.findMetadata(key, Zset)
+	// todo 暂时仅支持 score 为非负数
+	if err != nil {
+		return -1, err
+	}
+	if meta.size == 0 {
+		return -1, nil
+	}
+
+	// 构造数据部分 key 实例
+	zk := &zsetInternalKey{
+		key:     key,
+		version: meta.version,
+		member:  member,
+	}
+
+	value, err := dts.db.Get(zk.encodeWithMember())
+	if err != nil {
+		return -1, err
+	}
+
+	return utils.FloatFromBytes(value), nil
 }
