@@ -25,7 +25,9 @@ const (
 type DataTypeService struct {
 	db *bitcask.DB
 }
-
+func (dts *DataTypeService) Close() error {
+	return dts.db.Close()
+}
 // NewDataTypeService 初始化数据类型服务
 func NewDataTypeService(options bitcask.Options) (*DataTypeService, error) {
 	db, err := bitcask.Open(options)
