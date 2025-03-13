@@ -38,6 +38,9 @@ const (
 
 	// BPTree B+ 树索引
 	BPTree
+
+	// SkipList 跳表索引
+	SkipList
 )
 
 // NewIndexer 根据类型初始化索引
