@@ -1,6 +1,9 @@
 package bitcask_kv
 
-import "os"
+import (
+	"os"
+	"time"
+)
 
 type Options struct {
 	DirPath            string    // 数据库数据路径
@@ -10,6 +13,7 @@ type Options struct {
 	IndexType          IndexType // 索引的类型
 	MMapAtStartup      bool      // 启动时是否使用 MMap 加载数据
 	DataFileMergeRatio float32   // 数据文件合并的阈值
+	mergeCheckInterval time.Duration // 合并检查的间隔
 }
 
 // IteratorOptions 索引迭代器的配置项
@@ -50,6 +54,7 @@ var DefaultOptions = Options{
 	IndexType:     Btree,
 	MMapAtStartup: true,
 	DataFileMergeRatio: 0.5,
+	mergeCheckInterval: 10 * time.Second,
 }
 
 var DefaultIteratorOptions = IteratorOptions{

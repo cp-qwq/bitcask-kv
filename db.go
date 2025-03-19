@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gofrs/flock"
 )
@@ -38,6 +39,7 @@ type DB struct {
 	filelock        *flock.Flock              // 文件锁保证多进程之间的互斥
 	bytesWrite      uint                      // 累计写了多少个字节
 	reclaimSize     int64                     // 有多少数据是无效的
+	mergeStopChan 	chan struct{} 			  // 用于控制后台持久化协程关闭的通道
 }
 
 // Stat 存储引擎统计信息
@@ -82,6 +84,7 @@ func Open(options Options) (*DB, error) {
 		index:      index.NewIndexer(options.IndexType, options.DirPath, options.SyncWrites),
 		isInitial:  isInitial,
 		filelock:   filelock,
+		mergeStopChan: make(chan struct{}),
 	}
 
 	// 加载 merge 数据目录
@@ -124,7 +127,27 @@ func Open(options Options) (*DB, error) {
 		}
 	}
 
+	// 启动自动检查
+    go db.startMergeCheck()
+
 	return db, nil
+}
+
+// 自动检查是否需要 merge
+func (db *DB) startMergeCheck() error {
+    ticker := time.NewTicker(db.options.mergeCheckInterval)
+	defer ticker.Stop()
+    for {
+		select {
+		case <- ticker.C:
+			if err := db.Merge(); err != nil {
+				return err
+			}
+		case <- db.mergeStopChan:
+			return nil
+		}
+		
+	}
 }
 
 // Close 关闭数据库
@@ -179,6 +202,8 @@ func (db *DB) Close() error {
 			return err
 		}
 	}
+
+	close(db.mergeStopChan)
 	return nil
 }
 
@@ -190,6 +215,7 @@ func (db *DB) Sync() error {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
+	// 仅持久化当前活跃文件
 	return db.activeFile.Sync()
 }
 
@@ -281,7 +307,6 @@ func (db *DB) Delete(key []byte) error {
 	if oldPos != nil {
 		db.reclaimSize += int64(oldPos.Size)
 	}
-
 	return nil
 }
 
@@ -423,7 +448,7 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 	pos := &data.LogRecordPos{
 		Fid:    db.activeFile.FileId,
 		Offset: writeOff,
-		Size: uint32(size),
+		Size:   uint32(size),
 	}
 	return pos, nil
 }
